@@ -20,6 +20,7 @@ import json, os, urllib.request, urllib.parse
 TOKEN = os.environ['TOKEN']
 FILE_TOKEN = os.environ.get('TOKEN')  # file access token via public dump
 DOWNLOAD = os.environ.get('DOWNLOAD')
+TIMESTAMPFILE = "lastdownload.txt"
 
 client = WebClient(token=TOKEN)
 indent = 0
@@ -51,9 +52,12 @@ def all_channel_members(channel):
   return slack_list('members', f'all members in channel {channel["name"]}',
     client.conversations_members, channel=channel['id'])
 
-def all_channel_messages(channel):
-  return slack_list('messages', f'all messages from channel {channel["name"]}',
-    client.conversations_history, channel=channel['id'])
+def all_channel_messages(channel, oldest=None):
+    kwargs = {'channel': channel['id']}
+    if oldest:
+        kwargs['oldest'] = oldest
+    return slack_list('messages', f'all messages from channel {channel["name"]}',
+                      client.conversations_history, **kwargs)
 
 def all_users():
   return slack_list('members', 'all users', client.users_list)
@@ -64,10 +68,45 @@ def save_json(data, filename):
   with open(filename, 'w') as outfile:
     json.dump(data, outfile, indent=2)
 
+def load_last_timestamp(channel_name):
+    filename = f'backup/{channel_name}/last_timestamp.txt'
+    try:
+        with open(filename, 'r') as file:
+            return file.read().strip()
+    except FileNotFoundError:
+        return None
+
+def save_last_timestamp(channel_name, timestamp):
+    filename = f'backup/{channel_name}/last_timestamp.txt'
+    os.makedirs(os.path.dirname(filename), mode=0o700, exist_ok=True)
+    with open(filename, 'w') as file:
+        file.write(timestamp)
+
 def backup_channel(channel):
   try:
-    all_messages = all_channel_messages(channel)
-    save_json(all_messages, f'backup/{channel["name"]}/all.json')
+    # Fetch messages with a specific timestamp (oldest)
+    last_timestamp = load_last_timestamp(channel['name'])
+    all_messages = all_channel_messages(channel, oldest=last_timestamp)
+
+    if all_messages:
+            # Load existing messages if the file exists
+            backup_filename = f'backup/{channel["name"]}/all.json'
+            existing_messages = []
+            if os.path.exists(backup_filename):
+                with open(backup_filename, 'r') as existing_file:
+                    existing_messages = json.load(existing_file)
+
+            # Append new messages to the existing messages
+            existing_messages += all_messages
+
+            # Save the combined messages back to the file
+            with open(backup_filename, 'w') as outfile:
+                json.dump(existing_messages, outfile, indent=2)
+
+            # Save the last timestamp
+            last_message = all_messages[-1]
+            if 'ts' in last_message:
+                save_last_timestamp(channel['name'], last_message['ts'])
 
     # Rewrite private URLs to have token, like Slack's public dump
     filenames = {'all.json'}  # avoid overwriting json
@@ -99,8 +138,10 @@ def backup_channel(channel):
                     outfile.write(infile.read())
                 file[key + '_file'] = f'{channel["name"]}/{filename}'
     verbs = []
-    if DOWNLOAD: verbs.append('Downloaded')
-    if FILE_TOKEN: verbs.append('Linked')
+    if DOWNLOAD: 
+       verbs.append('Downloaded')
+    if FILE_TOKEN: 
+       verbs.append('Linked')
     if verbs: print(f'  {" & ".join(verbs)} {count} files from messages in {channel["name"]}.')
 
     if count and FILE_TOKEN:
@@ -108,6 +149,12 @@ def backup_channel(channel):
 
   except SlackApiError as e:
       print("Error using conversation: {}".format(e))
+  except FileNotFoundError:
+      print(f'No existing all.json file found for channel {channel["name"]}. Creating a new one.')
+      save_json(all_messages, f'backup/{channel["name"]}/all.json')
+      last_message = all_messages[-1]
+      if 'ts' in last_message:
+          save_last_timestamp(channel['name'], last_message['ts'])
 
 def backup_all_channels():
   global indent
