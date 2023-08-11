@@ -56,8 +56,25 @@ def all_channel_messages(channel, oldest=None):
     kwargs = {'channel': channel['id']}
     if oldest:
         kwargs['oldest'] = oldest
-    return slack_list('messages', f'all messages from channel {channel["name"]}',
-                      client.conversations_history, **kwargs)
+
+    main_messages = slack_list('messages', f'all messages from channel {channel["name"]}',
+                               client.conversations_history, **kwargs)
+
+    all_messages = []
+
+    seen_thread_ts = set()  # To track seen thread timestamps
+
+    for message in main_messages:
+        thread_ts = message.get('thread_ts')
+        if thread_ts and thread_ts not in seen_thread_ts:
+            seen_thread_ts.add(thread_ts)
+            thread_messages = slack_list('messages', f'threaded messages for {thread_ts} in channel {channel["name"]}',
+                                         client.conversations_replies, channel=channel['id'], ts=thread_ts)
+            all_messages.extend(thread_messages)
+        else:
+            all_messages.append(message)
+
+    return all_messages
 
 def all_users():
   return slack_list('members', 'all users', client.users_list)
@@ -96,15 +113,18 @@ def backup_channel(channel):
                 with open(backup_filename, 'r') as existing_file:
                     existing_messages = json.load(existing_file)
 
+            # Filter out messages that were already backed up
+            new_messages = [msg for msg in all_messages if msg not in existing_messages]
+
             # Append new messages to the existing messages
-            existing_messages += all_messages
+            existing_messages += new_messages
 
             # Save the combined messages back to the file
             with open(backup_filename, 'w') as outfile:
                 json.dump(existing_messages, outfile, indent=2)
 
             # Save the last timestamp
-            last_message = all_messages[-1]
+            last_message = new_messages[-1] if new_messages else all_messages[-1]
             if 'ts' in last_message:
                 save_last_timestamp(channel['name'], last_message['ts'])
 
