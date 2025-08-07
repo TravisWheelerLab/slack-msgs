@@ -52,10 +52,8 @@ def all_channel_members(channel):
   return slack_list('members', f'all members in channel {channel["name"]}',
     client.conversations_members, channel=channel['id'])
 
-def all_channel_messages(channel, oldest=None):
+def all_channel_messages(channel):
     kwargs = {'channel': channel['id']}
-    if oldest:
-        kwargs['oldest'] = oldest
 
     main_messages = slack_list('messages', f'all messages from channel {channel["name"]}',
                                client.conversations_history, **kwargs)
@@ -85,96 +83,73 @@ def save_json(data, filename):
   with open(filename, 'w') as outfile:
     json.dump(data, outfile, indent=2)
 
-def load_last_timestamp(channel_name):
-    filename = f'backup/{channel_name}/last_timestamp.txt'
-    try:
-        with open(filename, 'r') as file:
-            return file.read().strip()
-    except FileNotFoundError:
-        return None
-
-def save_last_timestamp(channel_name, timestamp):
-    filename = f'backup/{channel_name}/last_timestamp.txt'
-    os.makedirs(os.path.dirname(filename), mode=0o700, exist_ok=True)
-    with open(filename, 'w') as file:
-        file.write(timestamp)
-
 def backup_channel(channel):
-  try:
-    # Fetch messages with a specific timestamp (oldest)
-    last_timestamp = load_last_timestamp(channel['name'])
-    all_messages = all_channel_messages(channel, oldest=last_timestamp)
+    try:
+        # Always fetch the full message history (Slack may limit this)
+        all_messages = all_channel_messages(channel)
 
-    if all_messages:
-            # Load existing messages if the file exists
-            backup_filename = f'backup/{channel["name"]}/all.json'
-            existing_messages = []
-            if os.path.exists(backup_filename):
-                with open(backup_filename, 'r') as existing_file:
-                    existing_messages = json.load(existing_file)
+        backup_filename = f'backup/{channel["name"]}/all.json'
+        existing_messages = []
 
-            # Filter out messages that were already backed up
-            new_messages = [msg for msg in all_messages if msg not in existing_messages]
+        # Load existing messages if file exists
+        if os.path.exists(backup_filename):
+            with open(backup_filename, 'r') as existing_file:
+                existing_messages = json.load(existing_file)
 
-            # Append new messages to the existing messages
-            existing_messages += new_messages
+        # Deduplicate based on message 'ts'
+        existing_ts = {msg['ts'] for msg in existing_messages if 'ts' in msg}
+        new_messages = [msg for msg in all_messages if msg.get('ts') not in existing_ts]
 
-            # Save the combined messages back to the file
-            with open(backup_filename, 'w') as outfile:
-                json.dump(existing_messages, outfile, indent=2)
+        combined_messages = existing_messages + new_messages
+        combined_messages.sort(key=lambda x: float(x['ts']))
 
-            # Save the last timestamp
-            last_message = new_messages[-1] if new_messages else all_messages[-1]
-            if 'ts' in last_message:
-                save_last_timestamp(channel['name'], last_message['ts'])
+        # Save combined message set
+        os.makedirs(os.path.dirname(backup_filename), mode=0o700, exist_ok=True)
+        with open(backup_filename, 'w') as outfile:
+            json.dump(combined_messages, outfile, indent=2)
 
-    # Rewrite private URLs to have token, like Slack's public dump
-    filenames = {'all.json'}  # avoid overwriting json
-    count = 0
-    for message in all_messages:
-      if 'files' in message:
-        for file in message['files']:
-          count += 1
-          for key, value in list(file.items()):
-            if (key.startswith('url_private') or key.startswith('thumb')) \
-               and isinstance(value, str) and value.startswith('https://'):
-              if FILE_TOKEN:
-                file[key] = value + '?t=' + FILE_TOKEN
-              if DOWNLOAD and not key.endswith('_download'):
-                filename = os.path.basename(urllib.parse.urlparse(value).path)
-                if filename in filenames:
-                  i = 0
-                  base, ext = os.path.splitext(filename)
-                  def rewrite():
-                    return base + '_' + str(i) + ext
-                  while rewrite() in filenames:
-                    i += 1
-                  filename = rewrite()
-                filenames.add(filename)
-                # https://api.slack.com/types/file#authentication
-                with urllib.request.urlopen(urllib.request.Request(value,
-                       headers={'Authorization': 'Bearer ' + TOKEN})) as infile:
-                  with open(f'backup/{channel["name"]}/{filename}', 'wb') as outfile:
-                    outfile.write(infile.read())
-                file[key + '_file'] = f'{channel["name"]}/{filename}'
-    verbs = []
-    if DOWNLOAD: 
-       verbs.append('Downloaded')
-    if FILE_TOKEN: 
-       verbs.append('Linked')
-    if verbs: print(f'  {" & ".join(verbs)} {count} files from messages in {channel["name"]}.')
+        # Rewrite URLs and optionally download files
+        filenames = {'all.json'}
+        count = 0
+        for message in new_messages:  # only loop over new messages
+            if 'files' in message:
+                for file in message['files']:
+                    count += 1
+                    for key, value in list(file.items()):
+                        if (key.startswith('url_private') or key.startswith('thumb')) and isinstance(value, str) and value.startswith('https://'):
+                            if FILE_TOKEN:
+                                file[key] = value + '?t=' + FILE_TOKEN
+                            if DOWNLOAD and not key.endswith('_download'):
+                                filename = os.path.basename(urllib.parse.urlparse(value).path)
+                                if filename in filenames:
+                                    i = 0
+                                    base, ext = os.path.splitext(filename)
 
-    if count and FILE_TOKEN:
-      save_json(all_messages, f'backup/{channel["name"]}/all.json')
+                                    def rewrite():
+                                        return base + '_' + str(i) + ext
 
-  except SlackApiError as e:
-      print("Error using conversation: {}".format(e))
-  except FileNotFoundError:
-      print(f'No existing all.json file found for channel {channel["name"]}. Creating a new one.')
-      save_json(all_messages, f'backup/{channel["name"]}/all.json')
-      last_message = all_messages[-1]
-      if 'ts' in last_message:
-          save_last_timestamp(channel['name'], last_message['ts'])
+                                    while rewrite() in filenames:
+                                        i += 1
+                                    filename = rewrite()
+                                filenames.add(filename)
+                                with urllib.request.urlopen(urllib.request.Request(value,
+                                         headers={'Authorization': 'Bearer ' + TOKEN})) as infile:
+                                    with open(f'backup/{channel["name"]}/{filename}', 'wb') as outfile:
+                                        outfile.write(infile.read())
+                                file[key + '_file'] = f'{channel["name"]}/{filename}'
+
+        verbs = []
+        if DOWNLOAD:
+            verbs.append('Downloaded')
+        if FILE_TOKEN:
+            verbs.append('Linked')
+        if verbs:
+            print(f'  {" & ".join(verbs)} {count} files from messages in {channel["name"]}.')
+
+    except SlackApiError as e:
+        print("Error using conversation: {}".format(e))
+    except Exception as e:
+        print(f"Unexpected error backing up channel {channel['name']}: {e}")
 
 def backup_all_channels():
   global indent
