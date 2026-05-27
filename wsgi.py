@@ -129,7 +129,7 @@ def _jwt_is_valid(jwt: str) -> bool:
         # urlsafe base64 — pad to a multiple of 4 bytes
         padding     = '=' * (4 - len(payload_b64) % 4)
         payload     = json.loads(base64.urlsafe_b64decode(payload_b64 + padding))
-        return payload.get('exp', 0) > time.time()
+        return payload.get('exp', 0) > time.time() - 7200  # 2-hour grace period
     except Exception:
         return False
 
