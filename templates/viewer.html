@@ -167,6 +167,9 @@
   var selected = document.querySelector('.active');
   if (scrollable && selected) scrollable.scrollTop = selected.offsetTop - 200;
 
+  var messages = document.querySelector('.messages');
+  if (messages) messages.scrollTop = messages.scrollHeight;
+
   function makeToggle(titleId, listId) {
     var title = document.querySelector(titleId);
     var list = document.querySelector(listId);
