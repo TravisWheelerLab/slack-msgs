@@ -53,24 +53,35 @@ def all_channel_members(channel):
     client.conversations_members, channel=channel['id'])
 
 def all_channel_messages(channel):
-    kwargs = {'channel': channel['id']}
-
     main_messages = slack_list('messages', f'all messages from channel {channel["name"]}',
-                               client.conversations_history, **kwargs)
+                               client.conversations_history, channel=channel['id'])
 
     all_messages = []
-
-    seen_thread_ts = set()  # To track seen thread timestamps
+    seen_thread_ts = set()  # avoid fetching the same thread twice
 
     for message in main_messages:
+        ts        = message.get('ts')
         thread_ts = message.get('thread_ts')
-        if thread_ts and thread_ts not in seen_thread_ts:
+
+        # Always include the message itself (covers standalone messages,
+        # thread roots, and "also send to channel" thread broadcasts).
+        all_messages.append(message)
+
+        # Fetch replies only when this message is the root of a thread
+        # (thread_ts == ts).  Broadcasts have thread_ts != ts and must
+        # not trigger a redundant conversations_replies call; the root
+        # will be encountered separately in conversations_history.
+        if thread_ts and thread_ts == ts and thread_ts not in seen_thread_ts:
             seen_thread_ts.add(thread_ts)
-            thread_messages = slack_list('messages', f'threaded messages for {thread_ts} in channel {channel["name"]}',
-                                         client.conversations_replies, channel=channel['id'], ts=thread_ts)
-            all_messages.extend(thread_messages)
-        else:
-            all_messages.append(message)
+            replies = slack_list('messages',
+                                 f'replies for thread {thread_ts} in {channel["name"]}',
+                                 client.conversations_replies,
+                                 channel=channel['id'], ts=thread_ts)
+            # conversations_replies returns the root as its first item;
+            # skip it to avoid duplicating the message we already appended.
+            for reply in replies:
+                if reply.get('ts') != thread_ts:
+                    all_messages.append(reply)
 
     return all_messages
 
@@ -108,40 +119,44 @@ def backup_channel(channel):
         with open(backup_filename, 'w') as outfile:
             json.dump(combined_messages, outfile, indent=2)
 
-        # Rewrite URLs and optionally download files
-        filenames = {'all.json'}
+        # Optionally download files and rewrite URLs to local paths.
+        # When DOWNLOAD is set, files are saved as:
+        #   backup/{channel}/attachments/{file_id}-{original_name}
+        # using the Slack file ID as a prefix to guarantee uniqueness across
+        # all messages (avoids collisions when multiple files share the same name).
+        # The url_private / thumb_* fields in the JSON are then rewritten to the
+        # local Flask route (/channel/{channel}/attachments/...) so that
+        # slack-export-viewer serves files from disk rather than Slack's CDN.
+        # When DOWNLOAD is not set but FILE_TOKEN is, the token is appended to
+        # CDN URLs as a fallback to extend their usable lifetime.
         count = 0
         for message in new_messages:  # only loop over new messages
             if 'files' in message:
                 for file in message['files']:
                     count += 1
+                    file_id = file.get('id', 'unknown')
                     for key, value in list(file.items()):
                         if (key.startswith('url_private') or key.startswith('thumb')) and isinstance(value, str) and value.startswith('https://'):
-                            if FILE_TOKEN:
-                                file[key] = value + '?t=' + FILE_TOKEN
                             if DOWNLOAD and not key.endswith('_download'):
-                                filename = os.path.basename(urllib.parse.urlparse(value).path)
-                                if filename in filenames:
-                                    i = 0
-                                    base, ext = os.path.splitext(filename)
-
-                                    def rewrite():
-                                        return base + '_' + str(i) + ext
-
-                                    while rewrite() in filenames:
-                                        i += 1
-                                    filename = rewrite()
-                                filenames.add(filename)
-                                with urllib.request.urlopen(urllib.request.Request(value,
-                                         headers={'Authorization': 'Bearer ' + TOKEN})) as infile:
-                                    with open(f'backup/{channel["name"]}/{filename}', 'wb') as outfile:
-                                        outfile.write(infile.read())
-                                file[key + '_file'] = f'{channel["name"]}/{filename}'
+                                original_name = os.path.basename(urllib.parse.urlparse(value).path)
+                                local_filename = f'{file_id}-{original_name}'
+                                attachments_dir = f'backup/{channel["name"]}/attachments'
+                                local_path = f'{attachments_dir}/{local_filename}'
+                                os.makedirs(attachments_dir, mode=0o700, exist_ok=True)
+                                if not os.path.exists(local_path):
+                                    with urllib.request.urlopen(urllib.request.Request(value,
+                                             headers={'Authorization': 'Bearer ' + TOKEN})) as infile:
+                                        with open(local_path, 'wb') as outfile:
+                                            outfile.write(infile.read())
+                                # Rewrite URL to local viewer route
+                                file[key] = f'/channel/{channel["name"]}/attachments/{local_filename}'
+                            elif FILE_TOKEN:
+                                file[key] = value + '?t=' + FILE_TOKEN
 
         verbs = []
         if DOWNLOAD:
             verbs.append('Downloaded')
-        if FILE_TOKEN:
+        if FILE_TOKEN and not DOWNLOAD:
             verbs.append('Linked')
         if verbs:
             print(f'  {" & ".join(verbs)} {count} files from messages in {channel["name"]}.')
