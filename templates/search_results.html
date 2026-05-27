@@ -160,6 +160,7 @@
                     </li>
                 {% endfor %}
             </ul>
+            {% if groups %}
             <h3 id="group-title">Private Channels</h3>
             <ul class="list" id="group-list">
                 {% for group in groups %}
@@ -168,6 +169,8 @@
                     </li>
                 {% endfor %}
             </ul>
+            {% endif %}
+            {% if dm_users %}
             <h3 id="dm-title">Direct Messages</h3>
             <ul class="list" id="dms-list">
                 {% for dm in dm_users %}
@@ -179,6 +182,8 @@
                     </li>
                 {% endfor %}
             </ul>
+            {% endif %}
+            {% if mpim_users %}
             <h3 id="mpim-title">Group Direct Messages</h3>
             <ul class="list" id="mpims-list">
                 {% for mpim in mpim_users %}
@@ -190,6 +195,7 @@
                     </li>
                 {% endfor %}
             </ul>
+            {% endif %}
         </div>
     </div>
     {% endif %}
