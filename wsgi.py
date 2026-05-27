@@ -10,8 +10,11 @@ Run from /home/exouser/slack-msgs with:
 
 import base64
 import json
+import os
 import time
 
+import flask
+from jinja2 import ChoiceLoader, FileSystemLoader
 from werkzeug.wrappers import Request, Response
 
 from slackviewer.app import app
@@ -42,6 +45,64 @@ config = Config({
 })
 
 configure_app(app, config)
+
+# Prefer templates/ in this directory so we can extend the UI without
+# touching the installed package.
+app.jinja_env.loader = ChoiceLoader([
+    FileSystemLoader(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')),
+    app.jinja_env.loader,
+])
+
+
+@app.route("/search")
+def search():
+    q = flask.request.args.get('q', '').strip()
+    results = []
+    if q:
+        q_lower = q.lower()
+        ctx = flask._app_ctx_stack
+        for bucket_attr, result_type in [('channels', 'channel'), ('groups', 'group')]:
+            for name, messages in sorted((getattr(ctx, bucket_attr, None) or {}).items()):
+                for msg in messages:
+                    if q_lower in (msg._message.get('text') or '').lower():
+                        results.append((result_type, name, msg))
+                        if len(results) >= 500:
+                            break
+                if len(results) >= 500:
+                    break
+            if len(results) >= 500:
+                break
+        if len(results) < 500:
+            for dm_id, messages in sorted((getattr(ctx, 'dms', None) or {}).items()):
+                for msg in messages:
+                    if q_lower in (msg._message.get('text') or '').lower():
+                        results.append(('dm', dm_id, msg))
+                        if len(results) >= 500:
+                            break
+                if len(results) >= 500:
+                    break
+        if len(results) < 500:
+            for mpim_name, messages in sorted((getattr(ctx, 'mpims', None) or {}).items()):
+                for msg in messages:
+                    if q_lower in (msg._message.get('text') or '').lower():
+                        results.append(('mpim', mpim_name, msg))
+                        if len(results) >= 500:
+                            break
+                if len(results) >= 500:
+                    break
+
+    return flask.render_template(
+        'search_results.html',
+        query=q,
+        results=results,
+        channels=sorted((getattr(flask._app_ctx_stack, 'channels', None) or {}).keys()),
+        groups=sorted((getattr(flask._app_ctx_stack, 'groups', None) or {}).keys()),
+        dm_users=list(getattr(flask._app_ctx_stack, 'dm_users', None) or []),
+        mpim_users=list(getattr(flask._app_ctx_stack, 'mpim_users', None) or []),
+        no_sidebar=app.no_sidebar,
+        no_external_references=app.no_external_references,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Wiki.js JWT authentication middleware

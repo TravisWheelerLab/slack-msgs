@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+{% from "util.html" import render_message %}
+<head>
+    <meta charset="UTF-8">
+    <title>Slack Export - #{{ name }}</title>
+    {% if not no_external_references %}
+    <link rel=stylesheet type=text/css
+          href="{{ url_for('static', filename='viewer.css') }}">
+    {% endif %}
+    <style>
+    #sidebar {
+        display: inline-flex;
+        flex-direction: column;
+        overflow: hidden;
+        vertical-align: top;
+    }
+    #te-hub-banner {
+        background: #000;
+        padding: 10px 16px;
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+    }
+    #te-hub-banner a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+    }
+    #te-hub-banner a:hover { text-decoration: none; }
+    #te-hub-banner img { border-radius: 3px; flex-shrink: 0; }
+    #te-hub-banner span {
+        color: white;
+        font-weight: 900;
+        font-size: 16px;
+        letter-spacing: 0.3px;
+    }
+    #search-section {
+        padding: 10px 14px;
+        background: #3E313C;
+        border-bottom: 1px solid #2c2228;
+        flex-shrink: 0;
+    }
+    #search-section form { display: flex; gap: 6px; }
+    #search-section input[type="text"] {
+        flex: 1;
+        padding: 6px 10px;
+        border: none;
+        border-radius: 4px;
+        background: #2c2228;
+        color: white;
+        font-size: 13px;
+        outline: none;
+        min-width: 0;
+    }
+    #search-section input[type="text"]::placeholder { color: #a89ea7; }
+    #search-section input[type="text"]:focus {
+        background: #241e22;
+        box-shadow: 0 0 0 1px #4C9689;
+    }
+    #search-section button {
+        padding: 6px 10px;
+        background: #4C9689;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 13px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    #search-section button:hover { background: #3d7870; }
+    #sidebar-scrollable {
+        overflow-y: auto;
+        overflow-x: hidden;
+        flex: 1;
+        min-height: 0;
+    }
+    </style>
+</head>
+<body>
+<div id="slack-archive-viewer">
+    {% if not no_sidebar %}
+    <div id="sidebar">
+        <div id="te-hub-banner">
+            <a href="https://tehub.org">
+                <img src="https://tehub.org/te_hub_logo_v4.jpg" width="34" height="34" alt="TE Hub">
+                <span>TE Hub</span>
+            </a>
+        </div>
+        <div id="search-section">
+            <form action="/search" method="get">
+                <input type="text" name="q" placeholder="Search messages…" value="">
+                <button type="submit">Go</button>
+            </form>
+        </div>
+        <div id="sidebar-scrollable">
+            <h3 id="channel-title">Public Channels</h3>
+            <ul class="list" id="channel-list">
+                {% for channel in channels %}
+                    <li class="channel{% if channel == name %} active{% endif %}">
+                        <a href="{{ url_for('channel_name', name=channel) }}">
+                            # {{ channel }}
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+            <h3 id="group-title">Private Channels</h3>
+            <ul class="list" id="group-list">
+                {% for group in groups %}
+                    <li class="group{% if group == name %} active{% endif %}">
+                        <a href="{{ url_for('group_name', name=group) }}">
+                            &#128274; {{ group }}
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+            <h3 id="dm-title">Direct Messages</h3>
+            <ul class="list" id="dms-list">
+                {% for dm in dm_users %}
+                    <li class="dm{% if dm['id'] == id %} active{% endif %}">
+                        <a href="{{ url_for('dm_id', id=dm['id']) }}">
+                            &#128100; {{ dm["users"][0].real_name if dm["users"][0].real_name else dm["users"][0].name }}
+                            {% if dm["users"][1] %}, {{ dm["users"][1].real_name if dm["users"][1].real_name else dm["users"][1].name }}{% endif %}
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+            <h3 id="mpim-title">Group Direct Messages</h3>
+            <ul class="list" id="mpims-list">
+                {% for mpim in mpim_users %}
+                    <li class="mpim{% if mpim['name'] == name %} active{% endif %}">
+                        <a href="{{ url_for('mpim_name', name=mpim['name']) }}">
+                            &#128101;
+                            {% for user in mpim["users"] %}
+                            {{ user.real_name if user.real_name else user.name }},
+                            {% endfor %}
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+    <div class="messages">
+        {% for message in messages %}
+            {% if message.msg %}
+                {% if "Thread Reply:" in message.msg %}
+                    {{render_message(message, None, no_external_references, reply=True)}}
+                {% else %}
+                    {{render_message(message, None, no_external_references, reply=False)}}
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+(function() {
+  var scrollable = document.querySelector('#sidebar-scrollable');
+  var selected = document.querySelector('.active');
+  if (scrollable && selected) scrollable.scrollTop = selected.offsetTop - 200;
+
+  function makeToggle(titleId, listId) {
+    var title = document.querySelector(titleId);
+    var list = document.querySelector(listId);
+    if (title && list) {
+      title.addEventListener('click', function() {
+        title.classList.toggle('arrow');
+        list.classList.toggle('close');
+      });
+    }
+  }
+
+  makeToggle('#channel-title', '#channel-list');
+  makeToggle('#group-title', '#group-list');
+  makeToggle('#dm-title', '#dms-list');
+  makeToggle('#mpim-title', '#mpims-list');
+})()
+</script>
+</body>
+</html>

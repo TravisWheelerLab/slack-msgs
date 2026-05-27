@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% if query %}Search: {{ query|e }}{% else %}Search{% endif %} — Slack Export</title>
+    {% if not no_external_references %}
+    <link rel=stylesheet type=text/css href="{{ url_for('static', filename='viewer.css') }}">
+    {% endif %}
+    <style>
+    #sidebar {
+        display: inline-flex;
+        flex-direction: column;
+        overflow: hidden;
+        vertical-align: top;
+    }
+    #te-hub-banner {
+        background: #000;
+        padding: 10px 16px;
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+    }
+    #te-hub-banner a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+    }
+    #te-hub-banner a:hover { text-decoration: none; }
+    #te-hub-banner img { border-radius: 3px; flex-shrink: 0; }
+    #te-hub-banner span {
+        color: white;
+        font-weight: 900;
+        font-size: 16px;
+        letter-spacing: 0.3px;
+    }
+    #search-section {
+        padding: 10px 14px;
+        background: #3E313C;
+        border-bottom: 1px solid #2c2228;
+        flex-shrink: 0;
+    }
+    #search-section form { display: flex; gap: 6px; }
+    #search-section input[type="text"] {
+        flex: 1;
+        padding: 6px 10px;
+        border: none;
+        border-radius: 4px;
+        background: #2c2228;
+        color: white;
+        font-size: 13px;
+        outline: none;
+        min-width: 0;
+    }
+    #search-section input[type="text"]::placeholder { color: #a89ea7; }
+    #search-section input[type="text"]:focus {
+        background: #241e22;
+        box-shadow: 0 0 0 1px #4C9689;
+    }
+    #search-section button {
+        padding: 6px 10px;
+        background: #4C9689;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 13px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    #search-section button:hover { background: #3d7870; }
+    #sidebar-scrollable {
+        overflow-y: auto;
+        overflow-x: hidden;
+        flex: 1;
+        min-height: 0;
+    }
+
+    .search-header {
+        padding: 20px 20px 12px;
+        border-bottom: 1px solid #e8e8e8;
+    }
+    .search-header h2 {
+        margin: 0 0 4px;
+        font-size: 18px;
+        font-weight: 900;
+        color: #1d1c1d;
+    }
+    .search-header .result-count {
+        color: #888;
+        font-size: 13px;
+    }
+    .search-result {
+        padding: 12px 20px 10px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .search-result:hover { background: #f9f9f9; }
+    .search-result-meta {
+        font-size: 12px;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .search-result-meta .channel-link {
+        font-weight: 700;
+        color: #4C9689;
+    }
+    .search-result-meta .channel-link:hover { color: #3d7870; text-decoration: none; }
+    .search-result-meta .result-username { font-weight: 600; color: #333; }
+    .search-result-meta .result-time { color: #aaa; font-size: 11px; }
+    .search-result-body {
+        font-size: 14px;
+        line-height: 1.5;
+        color: #1d1c1d;
+    }
+    .search-result-body p { margin: 0; white-space: pre-wrap; }
+    .view-in-context {
+        font-size: 11px;
+        margin-top: 5px;
+    }
+    .view-in-context a { color: #aaa; }
+    .view-in-context a:hover { color: #4C9689; }
+    .no-results {
+        padding: 60px 20px;
+        color: #888;
+        text-align: center;
+        font-size: 15px;
+    }
+    .search-prompt {
+        padding: 60px 20px;
+        color: #aaa;
+        text-align: center;
+        font-size: 15px;
+    }
+    </style>
+</head>
+<body>
+<div id="slack-archive-viewer">
+    {% if not no_sidebar %}
+    <div id="sidebar">
+        <div id="te-hub-banner">
+            <a href="https://tehub.org">
+                <img src="https://tehub.org/te_hub_logo_v4.jpg" width="34" height="34" alt="TE Hub">
+                <span>TE Hub</span>
+            </a>
+        </div>
+        <div id="search-section">
+            <form action="/search" method="get">
+                <input type="text" name="q" placeholder="Search messages…" value="{{ query|e }}">
+                <button type="submit">Go</button>
+            </form>
+        </div>
+        <div id="sidebar-scrollable">
+            <h3 id="channel-title">Public Channels</h3>
+            <ul class="list" id="channel-list">
+                {% for channel in channels %}
+                    <li class="channel">
+                        <a href="{{ url_for('channel_name', name=channel) }}"># {{ channel }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+            <h3 id="group-title">Private Channels</h3>
+            <ul class="list" id="group-list">
+                {% for group in groups %}
+                    <li class="group">
+                        <a href="{{ url_for('group_name', name=group) }}">&#128274; {{ group }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+            <h3 id="dm-title">Direct Messages</h3>
+            <ul class="list" id="dms-list">
+                {% for dm in dm_users %}
+                    <li class="dm">
+                        <a href="{{ url_for('dm_id', id=dm['id']) }}">
+                            &#128100; {{ dm["users"][0].real_name if dm["users"][0].real_name else dm["users"][0].name }}
+                            {% if dm["users"][1] %}, {{ dm["users"][1].real_name if dm["users"][1].real_name else dm["users"][1].name }}{% endif %}
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+            <h3 id="mpim-title">Group Direct Messages</h3>
+            <ul class="list" id="mpims-list">
+                {% for mpim in mpim_users %}
+                    <li class="mpim">
+                        <a href="{{ url_for('mpim_name', name=mpim['name']) }}">
+                            &#128101;
+                            {% for user in mpim["users"] %}{{ user.real_name if user.real_name else user.name }}, {% endfor %}
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="messages">
+        {% if not query %}
+        <div class="search-prompt">Enter a search term above.</div>
+        {% else %}
+        <div class="search-header">
+            <h2>Results for "{{ query|e }}"</h2>
+            <span class="result-count">
+                {{ results|length }} message{{ 's' if results|length != 1 else '' }} found
+                {% if results|length == 500 %} (showing first 500){% endif %}
+            </span>
+        </div>
+        {% if results %}
+            {% for result_type, name, message in results %}
+            <div class="search-result">
+                <div class="search-result-meta">
+                    {% if result_type == 'channel' %}
+                    <a class="channel-link" href="{{ url_for('channel_name', name=name) }}"># {{ name }}</a>
+                    {% elif result_type == 'group' %}
+                    <a class="channel-link" href="{{ url_for('group_name', name=name) }}">&#128274; {{ name }}</a>
+                    {% elif result_type == 'dm' %}
+                    <a class="channel-link" href="{{ url_for('dm_id', id=name) }}">&#128100; {{ name }}</a>
+                    {% elif result_type == 'mpim' %}
+                    <a class="channel-link" href="{{ url_for('mpim_name', name=name) }}">&#128101; {{ name }}</a>
+                    {% endif %}
+                    <span class="result-username">{{ message.username }}</span>
+                    <span class="result-time">{{ message.time }}</span>
+                </div>
+                <div class="search-result-body">{{ message.msg|safe }}</div>
+                <div class="view-in-context">
+                    {% if result_type == 'channel' %}
+                    <a href="{{ url_for('channel_name', name=name) }}#{{ message.id }}">View in context →</a>
+                    {% elif result_type == 'group' %}
+                    <a href="{{ url_for('group_name', name=name) }}#{{ message.id }}">View in context →</a>
+                    {% elif result_type == 'dm' %}
+                    <a href="{{ url_for('dm_id', id=name) }}#{{ message.id }}">View in context →</a>
+                    {% elif result_type == 'mpim' %}
+                    <a href="{{ url_for('mpim_name', name=name) }}#{{ message.id }}">View in context →</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="no-results">No messages found for "{{ query|e }}".</div>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<script>
+(function() {
+  function makeToggle(titleId, listId) {
+    var title = document.querySelector(titleId);
+    var list = document.querySelector(listId);
+    if (title && list) {
+      title.addEventListener('click', function() {
+        title.classList.toggle('arrow');
+        list.classList.toggle('close');
+      });
+    }
+  }
+  makeToggle('#channel-title', '#channel-list');
+  makeToggle('#group-title', '#group-list');
+  makeToggle('#dm-title', '#dms-list');
+  makeToggle('#mpim-title', '#mpims-list');
+})()
+</script>
+</body>
+</html>
