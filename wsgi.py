@@ -101,6 +101,7 @@ def search():
         mpim_users=list(getattr(flask._app_ctx_stack, 'mpim_users', None) or []),
         no_sidebar=app.no_sidebar,
         no_external_references=app.no_external_references,
+        viewer_css_contents=None,
     )
 
 
