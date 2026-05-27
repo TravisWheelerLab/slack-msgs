@@ -77,6 +77,40 @@
         flex: 1;
         min-height: 0;
     }
+    .thread-toggle-row {
+        margin-left: 60px;
+        margin-top: -2px;
+        margin-bottom: 6px;
+    }
+    .thread-toggle {
+        background: none;
+        border: 1px solid #d0ccc8;
+        border-radius: 4px;
+        padding: 2px 9px;
+        cursor: pointer;
+        font-size: 12px;
+        color: #4C9689;
+        font-weight: 600;
+        line-height: 1.6;
+    }
+    .thread-toggle:hover {
+        background: #f2f0ee;
+        border-color: #4C9689;
+    }
+    .thread-arrow {
+        display: inline-block;
+        font-size: 9px;
+        margin-right: 4px;
+        transition: transform 0.15s ease;
+        vertical-align: middle;
+    }
+    .thread-replies {
+        display: none;
+        border-left: 2px solid #d0ccc8;
+        margin-left: 60px;
+        padding-left: 8px;
+        margin-bottom: 8px;
+    }
     </style>
 </head>
 <body>
@@ -150,15 +184,46 @@
     </div>
     {% endif %}
     <div class="messages">
-        {% for message in messages %}
-            {% if message.msg or message.files %}
-                {{render_message(message, None, no_external_references)}}
+        {% for root, replies in build_thread_groups(messages) %}
+            {% if root.msg or root.files %}
+                {{ render_message(root, None, no_external_references) }}
+                {% if replies %}
+                    {% set visible = replies | selectattr('msg') | list + replies | selectattr('files') | list %}
+                    {% if visible %}
+                        <div class="thread-toggle-row">
+                            <button class="thread-toggle" onclick="toggleThread(this)">
+                                <span class="thread-arrow">&#9654;</span>
+                                {{ visible | length }} repl{{ 'y' if visible | length == 1 else 'ies' }}
+                            </button>
+                        </div>
+                        <div class="thread-replies">
+                            {% for reply in replies %}
+                                {% if reply.msg or reply.files %}
+                                    {{ render_message(reply, None, no_external_references) }}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endif %}
             {% endif %}
         {% endfor %}
     </div>
 </div>
 
 <script>
+function toggleThread(btn) {
+  var replies = btn.closest('.thread-toggle-row').nextElementSibling;
+  var arrow = btn.querySelector('.thread-arrow');
+  var open = replies.style.display !== 'none' && replies.style.display !== '';
+  if (open) {
+    replies.style.display = 'none';
+    arrow.style.transform = '';
+  } else {
+    replies.style.display = 'block';
+    arrow.style.transform = 'rotate(90deg)';
+  }
+}
+
 (function() {
   var scrollable = document.querySelector('#sidebar-scrollable');
   var selected = document.querySelector('.active');

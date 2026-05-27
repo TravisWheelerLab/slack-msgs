@@ -54,6 +54,50 @@ app.jinja_env.loader = ChoiceLoader([
 ])
 
 
+def build_thread_groups(messages):
+    """
+    Group a flat, chronologically-sorted list of Message objects into threads.
+
+    Slack's backup format links replies to their root via thread_ts on each
+    message rather than embedding a 'replies' array, so the installed
+    _build_threads cannot handle it.  This function does the grouping at
+    render time using thread_ts.
+
+    Returns a list of (root_message, [reply_messages]) tuples ordered by the
+    timestamp of the root message.  Reply Message objects have is_thread_msg
+    set to True.
+    """
+    from collections import OrderedDict
+
+    roots = OrderedDict()   # ts -> (root_msg, [replies])
+    orphans = []            # (thread_ts, reply_msg) where root not yet seen
+
+    for msg in messages:
+        raw = msg._message
+        ts = raw.get('ts', '')
+        thread_ts = raw.get('thread_ts', '')
+
+        if not thread_ts or thread_ts == ts:
+            roots[ts] = (msg, [])
+        else:
+            msg.is_thread_msg = True
+            if thread_ts in roots:
+                roots[thread_ts][1].append(msg)
+            else:
+                orphans.append((thread_ts, msg))
+
+    for thread_ts, msg in orphans:
+        if thread_ts in roots:
+            roots[thread_ts][1].append(msg)
+        else:
+            roots[msg._message.get('ts', '')] = (msg, [])
+
+    return list(roots.values())
+
+
+app.jinja_env.globals['build_thread_groups'] = build_thread_groups
+
+
 @app.route("/search")
 def search():
     q = flask.request.args.get('q', '').strip()
