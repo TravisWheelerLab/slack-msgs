@@ -135,15 +135,25 @@ def _jwt_is_valid(jwt: str) -> bool:
 
 
 def _deny(environ, start_response):
-    """Return a 403 with a link back to Wiki.js to log in / refresh session."""
+    """Explain the session situation and give the user a clear path back."""
     response = Response(
-        '<html><body style="font-family:sans-serif;padding:2em">'
-        '<h2>Access denied</h2>'
-        '<p>Please <a href="https://tehub.org">log in to tehub.org</a> '
-        'first, then return to this page.</p>'
+        '<html><head><meta charset="UTF-8">'
+        '<title>Session refresh needed</title>'
+        '<style>body{font-family:sans-serif;padding:3em;max-width:480px;margin:auto}'
+        'a.btn{display:inline-block;margin-top:1em;padding:.6em 1.2em;background:#4C9689;'
+        'color:#fff;border-radius:4px;text-decoration:none}'
+        'a.btn:hover{background:#3d7870}'
+        'p{color:#444;line-height:1.5}'
+        '</style></head>'
+        '<body>'
+        '<h2>Session refresh needed</h2>'
+        '<p>Your archive session has expired. Visit tehub.org to refresh it '
+        '(you will not need to log in again if you are already logged in), '
+        'then use your browser’s back button to return here.</p>'
+        '<a class="btn" href="https://tehub.org" target="_blank">Open tehub.org</a>'
         '</body></html>',
-        status=403,
-        content_type='text/html',
+        status=401,
+        content_type='text/html; charset=utf-8',
     )
     return response(environ, start_response)
 
