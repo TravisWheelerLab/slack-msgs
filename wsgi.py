@@ -2,10 +2,7 @@
 WSGI entry point for slack-export-viewer under gunicorn.
 Run from /home/exouser/slack-msgs with:
 
-    gunicorn --workers 1 --bind 0.0.0.0:5000 \
-        --certfile /home/exouser/tehub/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/tehub.org/tehub.org.crt \
-        --keyfile  /home/exouser/tehub/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/tehub.org/tehub.org.key \
-        wsgi:application
+    gunicorn --workers 1 --bind 127.0.0.1:5000 wsgi:application
 """
 
 import base64
@@ -202,6 +199,20 @@ def _deny(environ, start_response):
     return response(environ, start_response)
 
 
+ARCHIVE_PREFIX = os.environ.get('ARCHIVE_PREFIX', '/slack_archive')
+
+
+class PrefixMiddleware:
+    """Set SCRIPT_NAME so Flask generates correct URLs when mounted at a subpath."""
+    def __init__(self, wsgi_app, prefix):
+        self.wsgi_app = wsgi_app
+        self.prefix = prefix
+
+    def __call__(self, environ, start_response):
+        environ['SCRIPT_NAME'] = self.prefix
+        return self.wsgi_app(environ, start_response)
+
+
 class WikiJSAuthMiddleware:
     def __init__(self, wsgi_app):
         self.wsgi_app = wsgi_app
@@ -213,4 +224,4 @@ class WikiJSAuthMiddleware:
         return self.wsgi_app(environ, start_response)
 
 
-application = WikiJSAuthMiddleware(app)
+application = WikiJSAuthMiddleware(PrefixMiddleware(app, ARCHIVE_PREFIX))

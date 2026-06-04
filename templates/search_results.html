@@ -5,59 +5,64 @@
     <title>{% if query %}Search: {{ query|e }}{% else %}Search{% endif %} — Slack Export</title>
     {% if not no_external_references %}
     <link rel=stylesheet type=text/css href="{{ url_for('static', filename='viewer.css') }}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
     {% endif %}
     <style>
-    #sidebar {
-        display: inline-flex;
+    body {
+        margin: 0;
+        display: flex;
         flex-direction: column;
-        overflow: hidden;
-        vertical-align: top;
+        height: 100vh;
     }
     #te-hub-banner {
         background: #000;
-        padding: 10px 16px;
+        padding: 0 16px;
+        height: 48px;
         display: flex;
         align-items: center;
         flex-shrink: 0;
     }
-    #te-hub-banner a {
+    .banner-brand {
+        flex: 0 0 280px;
+    }
+    .banner-brand a {
         display: flex;
         align-items: center;
         gap: 10px;
         text-decoration: none;
     }
-    #te-hub-banner a:hover { text-decoration: none; }
-    #te-hub-banner img { border-radius: 3px; flex-shrink: 0; }
-    #te-hub-banner span {
+    .banner-brand a:hover { text-decoration: none; }
+    .banner-brand img { border-radius: 3px; flex-shrink: 0; }
+    .banner-brand span {
         color: white;
-        font-weight: 900;
-        font-size: 16px;
-        letter-spacing: 0.3px;
+        font-family: Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-weight: 500;
+        font-size: 1.25rem;
+        letter-spacing: normal;
     }
-    #search-section {
-        padding: 10px 14px;
-        background: #3E313C;
-        border-bottom: 1px solid #2c2228;
-        flex-shrink: 0;
+    .banner-search {
+        flex: 1;
+        display: flex;
+        justify-content: center;
     }
-    #search-section form { display: flex; gap: 6px; }
-    #search-section input[type="text"] {
+    .banner-search form { display: flex; gap: 6px; width: 100%; max-width: 480px; }
+    .banner-search input[type="text"] {
         flex: 1;
         padding: 6px 10px;
         border: none;
         border-radius: 4px;
-        background: #2c2228;
+        background: rgba(255,255,255,0.15);
         color: white;
         font-size: 13px;
         outline: none;
         min-width: 0;
     }
-    #search-section input[type="text"]::placeholder { color: #a89ea7; }
-    #search-section input[type="text"]:focus {
-        background: #241e22;
+    .banner-search input[type="text"]::placeholder { color: #aaa; }
+    .banner-search input[type="text"]:focus {
+        background: rgba(255,255,255,0.22);
         box-shadow: 0 0 0 1px #4C9689;
     }
-    #search-section button {
+    .banner-search button {
         padding: 6px 10px;
         background: #4C9689;
         color: white;
@@ -67,14 +72,26 @@
         cursor: pointer;
         flex-shrink: 0;
     }
-    #search-section button:hover { background: #3d7870; }
+    .banner-search button:hover { background: #3d7870; }
+    #slack-archive-viewer {
+        flex: 1;
+        overflow: hidden;
+    }
+    #sidebar {
+        display: inline-flex;
+        flex-direction: column;
+        overflow: hidden;
+        vertical-align: top;
+        background-color: #1565C0;
+        height: 100%;
+    }
     #sidebar-scrollable {
         overflow-y: auto;
         overflow-x: hidden;
         flex: 1;
         min-height: 0;
     }
-
+    .messages { height: 100%; }
     .search-header {
         padding: 20px 20px 12px;
         border-bottom: 1px solid #e8e8e8;
@@ -136,21 +153,23 @@
     </style>
 </head>
 <body>
+<div id="te-hub-banner">
+    <div class="banner-brand">
+        <a href="https://tehub.org">
+            <!-- <img src="https://tehub.org/te_hub_logo_v4.jpg" width="34" height="34" alt="TE Hub"> -->
+            <span>TransposonsWorldwide</span>
+        </a>
+    </div>
+    <div class="banner-search">
+        <form action="{{ url_for('search') }}" method="get">
+            <input type="text" name="q" placeholder="Search messages…" value="{{ query|e }}">
+            <button type="submit">Go</button>
+        </form>
+    </div>
+</div>
 <div id="slack-archive-viewer">
     {% if not no_sidebar %}
     <div id="sidebar">
-        <div id="te-hub-banner">
-            <a href="https://tehub.org">
-	    	<!-- <img src="https://tehub.org/te_hub_logo_v4.jpg" width="34" height="34" alt="TE Hub"> -->
-                <span>TransposonsWorldwide</span>
-            </a>
-        </div>
-        <div id="search-section">
-            <form action="/search" method="get">
-                <input type="text" name="q" placeholder="Search messages…" value="{{ query|e }}">
-                <button type="submit">Go</button>
-            </form>
-        </div>
         <div id="sidebar-scrollable">
             <h3 id="channel-title">Public Channels</h3>
             <ul class="list" id="channel-list">
