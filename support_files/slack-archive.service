@@ -1,0 +1,19 @@
+# /etc/systemd/system/slack-archive.service
+[Unit]
+Description=Slack Archive Viewer
+After=network.target
+
+[Service]
+User=exouser
+WorkingDirectory=/home/exouser/slack-msgs
+ExecStart=/home/exouser/.local/bin/gunicorn \
+    --workers 1 \
+    --bind 0.0.0.0:5000 \
+#    --certfile /home/exouser/tehub/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/tehub.org/tehub.org.crt \
+#    --keyfile  /home/exouser/tehub/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/tehub.org/tehub.org.key \
+    wsgi:application
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

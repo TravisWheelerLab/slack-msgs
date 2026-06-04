@@ -1,0 +1,19 @@
+tehub.org {
+	handle_path /slack_archive* {
+		reverse_proxy 127.0.0.1:5000
+	}
+
+	@flask_assets path_regexp ^/(channel|group|dm|mpim)/
+	handle @flask_assets {
+		reverse_proxy 127.0.0.1:5000
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:6830
+	}
+
+	header {
+		-Referrer-Policy
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}
