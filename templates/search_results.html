@@ -23,7 +23,10 @@
         flex-shrink: 0;
     }
     .banner-brand {
-        flex: 0 0 280px;
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
     .banner-brand a {
         display: flex;
@@ -39,6 +42,19 @@
         font-weight: 400;
         font-size: 1.25rem;
         letter-spacing: normal;
+    }
+    .banner-separator {
+        color: rgba(255,255,255,0.5);
+        font-size: 1.25rem;
+        font-family: Roboto, 'Helvetica Neue', Arial, sans-serif;
+        margin: 0 2px;
+    }
+    .banner-archive-title {
+        color: rgba(255,255,255,0.85);
+        font-family: Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-weight: 400;
+        font-size: 1.25rem;
+        white-space: nowrap;
     }
     .sidebar-home {
         display: flex;
@@ -92,6 +108,21 @@
         flex-shrink: 0;
     }
     .banner-search button:hover { background: #3d7870; }
+    .banner-right {
+        flex: 0 0 auto;
+        margin-left: 16px;
+    }
+    .banner-right a {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: rgba(255,255,255,0.75);
+        text-decoration: none;
+        font-family: Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-size: 0.875rem;
+        white-space: nowrap;
+    }
+    .banner-right a:hover { color: white; text-decoration: none; }
     #slack-archive-viewer {
         flex: 1;
         overflow: hidden;
@@ -175,15 +206,23 @@
 <div id="te-hub-banner">
     <div class="banner-brand">
         <a href="https://tehub.org">
-            <!-- <img src="https://tehub.org/te_hub_logo_v4.jpg" width="34" height="34" alt="TE Hub"> -->
-            <span>TransposonsWorldwide</span>
+            <img src="https://tehub.org/te_hub_logo_v4.jpg" width="34" height="34" alt="TE Hub">
+            <span>TE Hub</span>
         </a>
+        <span class="banner-separator">*</span>
+        <span class="banner-archive-title">TransposonsWorldwide Slack Archive</span>
     </div>
     <div class="banner-search">
         <form action="{{ url_for('search') }}" method="get">
             <input type="text" name="q" placeholder="Search messages…" value="{{ query|e }}">
             <button type="submit">Go</button>
         </form>
+    </div>
+    <div class="banner-right">
+        <a href="https://transposonsworldwide.slack.com/" target="_blank" rel="noopener">
+            TransposonsWorldwide Slack Workspace
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+        </a>
     </div>
 </div>
 <div id="slack-archive-viewer">

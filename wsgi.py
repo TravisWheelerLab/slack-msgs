@@ -94,6 +94,20 @@ def build_thread_groups(messages):
 
 app.jinja_env.globals['build_thread_groups'] = build_thread_groups
 
+# Build channel metadata mapping for Slack deep links (name → {id, team_id})
+_channels_json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backup', 'channels.json')
+_channel_meta = {}
+try:
+    with open(_channels_json_path, encoding='utf-8') as _f:
+        for _ch in json.load(_f):
+            _channel_meta[_ch['name']] = {
+                'id': _ch.get('id', ''),
+                'team_id': _ch.get('context_team_id', ''),
+            }
+except Exception:
+    pass
+app.jinja_env.globals['channel_meta'] = _channel_meta
+
 
 @app.route("/search")
 def search():
