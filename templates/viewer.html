@@ -213,7 +213,7 @@
             <img src="https://tehub.org/te_hub_logo_v4.jpg" width="34" height="34" alt="TE Hub">
             <span>TE Hub</span>
         </a>
-        <span class="banner-separator">*</span>
+        <span class="banner-separator">></span>
         <span class="banner-archive-title">TransposonsWorldwide Slack Archive</span>
     </div>
     <div class="banner-search">
@@ -356,7 +356,20 @@ function toggleThread(btn) {
   if (scrollable && selected) scrollable.scrollTop = selected.offsetTop - 200;
 
   var messages = document.querySelector('.messages');
-  if (messages) messages.scrollTop = messages.scrollHeight;
+  function scrollToBottom() { if (messages) messages.scrollTop = messages.scrollHeight; }
+  scrollToBottom();
+  if (messages) {
+    var imgs = messages.querySelectorAll('img');
+    var pending = imgs.length;
+    if (pending === 0) return;
+    imgs.forEach(function(img) {
+      if (img.complete) { if (--pending === 0) scrollToBottom(); }
+      else {
+        img.addEventListener('load', function() { if (--pending === 0) scrollToBottom(); });
+        img.addEventListener('error', function() { if (--pending === 0) scrollToBottom(); });
+      }
+    });
+  }
 
   function makeToggle(titleId, listId) {
     var title = document.querySelector(titleId);
